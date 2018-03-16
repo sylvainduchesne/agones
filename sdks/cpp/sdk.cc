@@ -61,7 +61,7 @@ namespace agones {
                 if (std::future_status::ready == future.wait_until(now + std::chrono::seconds(HEALTHCHECK_TIMEOUT_SECONDS)))
                 {
                     sleepSeconds = HEALTHCHECK_TIMEOUT_SECONDS - std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - now).count();
-                    Health(); // true
+                    Health(); // Health(future.get());
                 }
                 else
                 {
