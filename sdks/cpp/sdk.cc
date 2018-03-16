@@ -12,14 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <future>
 #include "sdk.h"
 #include "sdk.pb.h"
 
+#define HEALTHCHECK_TIMEOUT_SECONDS 10 // externally obtained
 namespace agones {
 
     const int port = 59357;
 
-    SDK::SDK() {
+    SDK::SDK(const std::function<bool()> onHealthCheck) :
+        m_shutShutdown(false) {
+        if (onHealthCheck == nullptr)
+        {
+            m_onHealthCheck = std::bind(&SDK::DefaultHealthCheck, this);
+        }
+        else
+        {
+            m_onHealthCheck = onHealthCheck;
+        }
+
         channel = grpc::CreateChannel("localhost:" + std::to_string(port), grpc::InsecureChannelCredentials());
     }
 
@@ -38,6 +50,29 @@ namespace agones {
     }
 
     grpc::Status SDK::Ready() {
+        std::thread t([&]() {
+            // call health immediately on ready, or wait sleep seconds?
+            while (!m_shutShutdown) {
+                std::future<bool> future = std::async(std::launch::async, m_onHealthCheck);
+                std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
+                // not sure what the logic should be here, if we timeout waiting for the callback, should we retry immediately, or sleep the 
+                // defined amount of seconds (which would result in timeout*2)
+                long sleepSeconds = 0;
+                if (std::future_status::ready == future.wait_until(now + std::chrono::seconds(HEALTHCHECK_TIMEOUT_SECONDS)))
+                {
+                    sleepSeconds = HEALTHCHECK_TIMEOUT_SECONDS - std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - now).count();
+                    Health(); // true
+                }
+                else
+                {
+                    // probably warn here
+                    Health(); // false
+                }
+
+                std::this_thread::sleep_for(std::chrono::seconds(sleepSeconds));
+            }
+        });
+        t.detach();
         grpc::ClientContext *context = new grpc::ClientContext();
         context->set_deadline(gpr_time_add(gpr_now(GPR_CLOCK_REALTIME), gpr_time_from_seconds(30, GPR_TIMESPAN)));
         stable::agones::dev::sdk::Empty request;

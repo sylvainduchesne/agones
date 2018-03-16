@@ -22,7 +22,7 @@ namespace agones {
         public:
             // Creates a new instance of the SDK.
             // Does not connect to anything.
-            SDK();
+            SDK(const std::function<bool()> onHealthCheck);
 
             // Must be called before any other functions on the SDK.
             // This will attempt to do a handshake with the sdk server, timing out
@@ -42,8 +42,12 @@ namespace agones {
             ~SDK();
 
         private:
+            bool DefaultHealthCheck() { return true; }
+
+            bool m_shutShutdown;
             std::shared_ptr<grpc::Channel> channel;
             std::unique_ptr<stable::agones::dev::sdk::SDK::Stub> stub;
             std::unique_ptr< ::grpc::ClientWriter< ::stable::agones::dev::sdk::Empty>> health;
+            std::function<bool()> m_onHealthCheck;
     };
 }

@@ -21,23 +21,16 @@
 #include <agones/sdk.h>
 #include <grpc++/grpc++.h>
 
-// send health check pings
-void doHealth(agones::SDK *sdk) {
-    while (true) {
-        if (!sdk->Health()) {
-            std::cout << "Health ping failed" << std::endl;
-        } else {
-            std::cout << "Health ping sent" << std::endl;
-        }
-        std::this_thread::sleep_for(std::chrono::seconds(2));
-    }
+bool MyHealthCheck() {
+    std::cout << "Health check called!" << std::endl;
+    return true;
 }
 
 int main() {
     std::cout << "C++ Game Server has started!" << std::endl;
 
     std::cout << "Getting the instance of the SDK!" << std::endl;
-    agones::SDK *sdk = new agones::SDK();
+    agones::SDK *sdk = new agones::SDK(&MyHealthCheck);
 
     std::cout << "Attempting to connect..." << std::endl;
     bool connected = sdk->Connect();
@@ -47,18 +40,16 @@ int main() {
     }
     std::cout << "...handshake complete." << std::endl;
 
-    std::thread health (doHealth, sdk);
-
     std::cout << "Marking server as ready..." << std::endl;
     grpc::Status status = sdk->Ready();
     if (!status.ok()) {
-        std::cout << "Could not run Ready(): "+ status.error_message() + ". Exiting!" << std::endl;
+        std::cout << "Could not run Ready(): " + status.error_message() + ". Exiting!" << std::endl;
         return -1;
     }
     std::cout << "...marked Ready" << std::endl;
 
     for (int i = 0; i < 10; i++) {
-        int time = i*10;
+        int time = i * 10;
         std::cout << "Running for " + std::to_string(time) + " seconds !" << std::endl;
 
         std::this_thread::sleep_for(std::chrono::seconds(10));
