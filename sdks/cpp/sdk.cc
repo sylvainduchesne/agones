@@ -21,8 +21,8 @@ namespace agones {
 
     const int port = 59357;
 
-    SDK::SDK(const std::function<bool()> onHealthCheck) :
-        m_shutShutdown(false) {
+    SDK::SDK(const std::function<bool()> onHealthCheck):
+        m_shutShutdown(false){
         if (onHealthCheck == nullptr)
         {
             m_onHealthCheck = std::bind(&SDK::DefaultHealthCheck, this);
@@ -52,21 +52,26 @@ namespace agones {
     grpc::Status SDK::Ready() {
         std::thread t([&]() {
             // call health immediately on ready, or wait sleep seconds?
-            while (!m_shutShutdown) {
+            while (!m_shutShutdown) {                
                 std::future<bool> future = std::async(std::launch::async, m_onHealthCheck);
                 std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
                 // not sure what the logic should be here, if we timeout waiting for the callback, should we retry immediately, or sleep the 
                 // defined amount of seconds (which would result in timeout*2)
                 long sleepSeconds = 0;
+                bool healthOK = false;
                 if (std::future_status::ready == future.wait_until(now + std::chrono::seconds(HEALTHCHECK_TIMEOUT_SECONDS)))
-                {
+                {                    
                     sleepSeconds = HEALTHCHECK_TIMEOUT_SECONDS - std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - now).count();
-                    Health(); // Health(future.get());
+                    healthOK = future.get();
+                }
+                if (healthOK) {
+                    Health(); // ping
                 }
                 else
                 {
                     // probably warn here
-                    Health(); // false
+                    // skip health ping since we timed out on health check
+                    // Health(); 
                 }
 
                 std::this_thread::sleep_for(std::chrono::seconds(sleepSeconds));
